@@ -2737,7 +2737,7 @@ func (b *PlanBuilder) buildWindowFunctionFrameBound(spec *ast.WindowSpec, orderB
 
 	if frameType == ast.Rows {
 		// Rows type does not support interval range.
-		if boundClause.Unit != nil {
+		if boundClause.Unit != ast.TimeUnitInvalid {
 			return nil, ErrWindowRowsIntervalUse.GenWithStackByArgs(spec.Name)
 		}
 		numRows, isNull, isExpectedType := getUintFromNode(b.ctx, boundClause.Expr)
@@ -2756,7 +2756,7 @@ func (b *PlanBuilder) buildWindowFunctionFrameBound(spec *ast.WindowSpec, orderB
 	if !isNumeric && !isTemporal {
 		return nil, ErrWindowRangeFrameOrderType.GenWithStackByArgs(spec.Name)
 	}
-	if boundClause.Unit != nil {
+	if boundClause.Unit != ast.TimeUnitInvalid {
 		// Interval bounds only support order by temporal types.
 		if isNumeric {
 			return nil, ErrWindowRangeFrameNumericType.GenWithStackByArgs(spec.Name)
@@ -2772,9 +2772,12 @@ func (b *PlanBuilder) buildWindowFunctionFrameBound(spec *ast.WindowSpec, orderB
 		if uVal < 0 || isNull || err != nil {
 			return nil, ErrWindowFrameIllegal.GenWithStackByArgs(spec.Name)
 		}
-		// It can be guaranteed by the parser.
-		unitVal := boundClause.Unit.(*driver.ValueExpr)
-		unit := expression.Constant{Value: unitVal.Datum, RetType: unitVal.GetType()}
+		// TODO: Perhaps we don't need to transcode this back to generic string
+		unitVal := boundClause.Unit.String()
+		unit := expression.Constant{
+			Value:   types.NewStringDatum(unitVal),
+			RetType: types.NewFieldType(mysql.TypeVarchar),
+		}
 
 		funcName := ast.DateAdd
 		if bound.Type == ast.Preceding {
